@@ -9,25 +9,86 @@ You will implement the functions in recommender.py:
 - recommend_songs
 """
 
-from src.recommender import load_songs, recommend_songs
+import argparse
+import textwrap
+
+from src.recommender import load_songs, recommend_songs, STRATEGIES
+
+REASONS_COLUMN_WIDTH = 60
 
 
-def print_recommendations(label: str, user_prefs: dict, songs: list, k: int = 5) -> None:
+def _render_table(headers: list, rows: list, wrap_widths: dict) -> str:
+    """
+    Renders rows as a simple ASCII table (no external dependency). Columns
+    listed in wrap_widths get word-wrapped onto extra lines within their row
+    instead of stretching the whole table.
+    """
+    wrapped_rows = [
+        [textwrap.wrap(str(cell), wrap_widths[header]) or [""] if header in wrap_widths else [str(cell)]
+         for header, cell in zip(headers, row)]
+        for row in rows
+    ]
+
+    col_widths = [
+        max([len(header)] + [len(line) for wrapped_row in wrapped_rows for line in wrapped_row[col_idx]])
+        for col_idx, header in enumerate(headers)
+    ]
+
+    def border(char: str = "-") -> str:
+        return "+" + "+".join(char * (width + 2) for width in col_widths) + "+"
+
+    def format_row(cells: list) -> str:
+        return "| " + " | ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(cells)) + " |"
+
+    lines = [border(), format_row(headers), border("=")]
+    for wrapped_row in wrapped_rows:
+        for line_idx in range(max(len(col) for col in wrapped_row)):
+            lines.append(format_row([col[line_idx] if line_idx < len(col) else "" for col in wrapped_row]))
+        lines.append(border())
+
+    return "\n".join(lines)
+
+
+def print_recommendations(label: str, user_prefs: dict, songs: list, k: int = 5, strategy=None) -> None:
     print("\n" + "=" * 50)
     print(label)
     print("=" * 50)
     try:
-        recommendations = recommend_songs(user_prefs, songs, k=k)
+        recommendations = recommend_songs(user_prefs, songs, k=k, strategy=strategy)
     except KeyError as e:
         print(f"   -> KeyError: missing preference key {e}")
         return
-    for rank, (song, score, explanation) in enumerate(recommendations, start=1):
-        print(f"\n{rank}. {song['title']} by {song['artist']}")
-        print(f"   Score:  {score:.2f}")
-        print(f"   Reason: {explanation}")
+
+    headers = ["#", "Title", "Artist", "Score", "Reasons"]
+    rows = [
+        [rank, song["title"], song["artist"], f"{score:.2f}", explanation]
+        for rank, (song, score, explanation) in enumerate(recommendations, start=1)
+    ]
+    print(_render_table(headers, rows, wrap_widths={"Reasons": REASONS_COLUMN_WIDTH}))
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the music recommender simulation.")
+    parser.add_argument(
+        "--profile",
+        type=int,
+        default=None,
+        help="Index (0-based) of a single profile to run. Omit to run all profiles.",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available profile indices and labels, then exit.",
+    )
+    parser.add_argument(
+        "--strategy",
+        choices=sorted(STRATEGIES.keys()),
+        default="balanced",
+        help="Ranking strategy to use (default: balanced).",
+    )
+    args = parser.parse_args()
+
+    strategy = STRATEGIES[args.strategy]
     songs = load_songs("data/songs.csv")
 
     profiles = [
@@ -153,8 +214,19 @@ def main() -> None:
         ),
     ]
 
-    for label, user_prefs in profiles:
-        print_recommendations(label, user_prefs, songs, k=5)
+    if args.list:
+        for i, (label, _) in enumerate(profiles):
+            print(f"{i}: {label}")
+        return
+
+    print(f"Ranking strategy: {strategy.name}")
+
+    if args.profile is not None:
+        label, user_prefs = profiles[args.profile]
+        print_recommendations(label, user_prefs, songs, k=5, strategy=strategy)
+    else:
+        for label, user_prefs in profiles:
+            print_recommendations(label, user_prefs, songs, k=5, strategy=strategy)
 
     print("\n" + "=" * 50)
 

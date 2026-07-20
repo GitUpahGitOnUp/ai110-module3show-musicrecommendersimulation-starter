@@ -7,7 +7,7 @@ def make_small_recommender() -> Recommender:
             title="Test Pop Track",
             artist="Test Artist",
             genre="pop",
-            mood="happy",
+            mood=["happy", "euphoric"],
             energy=0.8,
             tempo_bpm=120,
             valence=0.9,
@@ -19,7 +19,7 @@ def make_small_recommender() -> Recommender:
             title="Chill Lofi Loop",
             artist="Test Artist",
             genre="lofi",
-            mood="chill",
+            mood=["chill"],
             energy=0.4,
             tempo_bpm=80,
             valence=0.6,
@@ -43,7 +43,7 @@ def test_recommend_returns_songs_sorted_by_score():
     assert len(results) == 2
     # Starter expectation: the pop, happy, high energy song should score higher
     assert results[0].genre == "pop"
-    assert results[0].mood == "happy"
+    assert "happy" in results[0].mood
 
 
 def test_explain_recommendation_returns_non_empty_string():
